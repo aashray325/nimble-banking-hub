@@ -1,4 +1,5 @@
-import { useState } from 'react';
+
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,20 @@ const CompleteProfile = () => {
   const [lastName, setLastName] = useState('');
   const [initialBalance, setInitialBalance] = useState('1000');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tempEmail, setTempEmail] = useState<string>('');
+
+  // Get stored email from localStorage
+  useEffect(() => {
+    const tempUser = localStorage.getItem('tempUser');
+    if (tempUser) {
+      try {
+        const { email } = JSON.parse(tempUser);
+        setTempEmail(email);
+      } catch (error) {
+        console.error('Error parsing temp user data:', error);
+      }
+    }
+  }, []);
 
   // Check if we have temp user data
   const hasTempUser = !!localStorage.getItem('tempUser');
@@ -36,7 +51,7 @@ const CompleteProfile = () => {
       await completeProfile({
         firstName,
         lastName,
-        email: '', // Will be taken from temp storage
+        email: tempEmail,
         initialBalance: balanceValue,
       });
     } catch (error) {

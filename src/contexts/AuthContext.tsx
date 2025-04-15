@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -129,8 +128,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) throw error;
       
-      // Store temp email for profile completion
-      localStorage.setItem('tempUser', JSON.stringify({ email }));
+      // Store temp email AND password for profile completion
+      localStorage.setItem('tempUser', JSON.stringify({ email, password }));
       
       // Navigate to complete profile
       navigate('/complete-profile');
@@ -150,21 +149,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     initialBalance: number;
   }) => {
     try {
-      // Get temp user email from storage
-      const tempUser = localStorage.getItem('tempUser');
-      if (!tempUser) {
-        throw new Error('No temporary user found');
+      // Get temp user email from storage or from passed data
+      const email = profileData.email || (() => {
+        const tempUser = localStorage.getItem('tempUser');
+        if (!tempUser) throw new Error('No temporary user found');
+        return JSON.parse(tempUser).email;
+      })();
+      
+      if (!email) {
+        throw new Error('Email is required');
       }
       
-      const { email } = JSON.parse(tempUser);
+      // Get current session or try to get it from auth
+      const { data: sessionData } = await supabase.auth.getSession();
+      let userId = sessionData.session?.user.id;
       
-      // Get user id from auth
-      const { data: authData } = await supabase.auth.getSession();
-      if (!authData.session?.user.id) {
-        throw new Error('User not authenticated');
+      // If no user ID from session, check if we need to sign in
+      if (!userId) {
+        // Try to retrieve stored credentials
+        const tempUser = localStorage.getItem('tempUser');
+        if (tempUser) {
+          const { email, password } = JSON.parse(tempUser);
+          if (email && password) {
+            // Log the user in
+            const { data, error } = await supabase.auth.signInWithPassword({
+              email,
+              password
+            });
+            
+            if (error) throw error;
+            userId = data.user?.id;
+          }
+        }
       }
       
-      const userId = authData.session.user.id;
+      // Final check if we have a user ID
+      if (!userId) {
+        throw new Error('User not authenticated. Please sign up again.');
+      }
       
       // Insert customer record
       const { data: customerData, error: customerError } = await supabase
@@ -179,7 +201,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .select()
         .single();
         
-      if (customerError) throw customerError;
+      if (customerError) {
+        console.error('Customer creation error:', customerError);
+        throw new Error('Failed to create customer record: ' + customerError.message);
+      }
       
       // Create account for customer
       if (customerData) {
@@ -194,7 +219,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
           ]);
           
-        if (accountError) throw accountError;
+        if (accountError) {
+          console.error('Account creation error:', accountError);
+          throw new Error('Failed to create account: ' + accountError.message);
+        }
       }
       
       // Clean up temp storage
@@ -204,7 +232,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       await fetchUserProfile(userId);
       
       toast.success('Profile completed successfully');
-      navigate('/dashboard');
+      // Navigate to dashboard (this is handled by the component based on isLoggedIn)
     } catch (error) {
       console.error('Profile completion error:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to complete profile');
