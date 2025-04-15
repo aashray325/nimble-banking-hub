@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -5,18 +6,30 @@ import { toast } from '@/components/ui/sonner';
 
 // Define types
 export type Transaction = {
-  trans_id: string;
-  fromID: string | null;
-  toID: string | null;
+  id: string;
+  trans_id: number;
+  fromID: number | null;
+  toID: number | null;
+  fromAccount?: string;
+  toAccount?: string;
   amount: number;
   type: string;
+  timestamp: Date;
 };
 
 export type Loan = {
-  loan_id: string;
-  cust_id: string;
+  id: string;
+  loan_id: number;
+  cust_id: number;
   amount: number;
   branch_id: number;
+  remainingAmount: number;
+  monthlyPayment: number;
+  interestRate: number;
+  term: number;
+  createdAt: Date;
+  paid: boolean;
+  userId?: string;
 };
 
 type BankingContextType = {
@@ -36,7 +49,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
-  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<number | null>(null);
 
   // Fetch account and transaction data
   useEffect(() => {
@@ -67,6 +80,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .single();
 
         if (accountError) throw accountError;
+        
         if (accountData) {
           setAccountId(accountData.account_id);
         }
@@ -87,7 +101,23 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .or(`fromID.eq.${accountId},toID.eq.${accountId}`);
 
       if (error) throw error;
-      setTransactions(data || []);
+      
+      if (data) {
+        // Convert the database results to our Transaction type
+        const formattedTransactions: Transaction[] = data.map(t => ({
+          id: t.trans_id.toString(),
+          trans_id: t.trans_id,
+          fromID: t.fromID,
+          toID: t.toID,
+          fromAccount: t.fromID?.toString(),
+          toAccount: t.toID?.toString(),
+          amount: t.amount,
+          type: t.type,
+          timestamp: new Date()
+        }));
+        
+        setTransactions(formattedTransactions);
+      }
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast.error('Failed to fetch transactions');
@@ -113,7 +143,36 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           .eq('cust_id', customerData.id);
 
         if (error) throw error;
-        setLoans(data || []);
+        
+        if (data) {
+          // Convert the database results to our Loan type
+          const formattedLoans: Loan[] = data.map(loan => {
+            // Calculate remaining amount (simplified)
+            const remainingAmount = loan.amount * 0.8; // Example calculation
+            
+            // Calculate monthly payment
+            const interestRate = 5 + (loan.amount > 10000 ? 2 : 0);
+            const term = 24; // Default term
+            const monthlyPayment = (loan.amount * (interestRate / 100 / 12)) / (1 - Math.pow(1 + (interestRate / 100 / 12), -term));
+            
+            return {
+              id: loan.loan_id.toString(),
+              loan_id: loan.loan_id,
+              cust_id: loan.cust_id,
+              amount: loan.amount,
+              branch_id: loan.branch_id || 0,
+              remainingAmount: remainingAmount,
+              monthlyPayment: monthlyPayment,
+              interestRate: interestRate,
+              term: term,
+              createdAt: new Date(),
+              paid: remainingAmount <= 0,
+              userId: user.id
+            };
+          });
+          
+          setLoans(formattedLoans);
+        }
       }
     } catch (error) {
       console.error('Error fetching loans:', error);
@@ -128,31 +187,36 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     try {
       // First, insert the transaction
-      const { error: transError } = await supabase
+      const { data, error: transError } = await supabase
         .from('transactions')
-        .insert([
-          {
-            fromID: accountId,
-            toID: toAccount,
-            amount,
-            type: 'Transfer',
-          },
-        ]);
+        .insert({
+          fromID: accountId,
+          toID: parseInt(toAccount),
+          amount,
+          type: description || 'Transfer'
+        })
+        .select();
 
       if (transError) throw transError;
 
       // Update balances
-      const { error: fromError } = await supabase
-        .from('account')
-        .update({ balance: supabase.sql`balance - ${amount}` })
-        .eq('account_id', accountId);
+      const { error: fromError } = await supabase.rpc(
+        'update_balance',
+        { 
+          p_account_id: accountId,
+          p_amount: -amount 
+        }
+      );
 
       if (fromError) throw fromError;
 
-      const { error: toError } = await supabase
-        .from('account')
-        .update({ balance: supabase.sql`balance + ${amount}` })
-        .eq('account_id', toAccount);
+      const { error: toError } = await supabase.rpc(
+        'update_balance',
+        { 
+          p_account_id: parseInt(toAccount),
+          p_amount: amount 
+        }
+      );
 
       if (toError) throw toError;
 
@@ -182,48 +246,86 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // Calculate interest rate based on loan amount and term
-    // This is simplified; in a real app, this would be more complex
     const interestRate = 5 + (amount > 10000 ? 2 : 0) + (term > 24 ? 1 : 0);
 
     // Calculate monthly payment
-    // Using simplified formula: P = L[i(1+i)^n]/[(1+i)^n-1]
     const monthlyInterest = interestRate / 100 / 12;
     const monthlyPayment =
       (amount * monthlyInterest * Math.pow(1 + monthlyInterest, term)) /
       (Math.pow(1 + monthlyInterest, term) - 1);
 
-    // Create loan
-    const newLoan: Loan = {
-      loan_id: Date.now().toString(),
-      cust_id: user.id,
-      amount,
-      branch_id: 1, // Default branch ID
-    };
+    try {
+      // Get customer ID
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('uid', user.id)
+        .single();
 
-    // Create loan disbursement transaction
-    const loanTransaction: Transaction = {
-      trans_id: Date.now().toString() + '-loan',
-      fromID: 'BANK',
-      toID: accountId,
-      amount,
-      type: 'loan',
-    };
+      if (customerError) throw customerError;
+      
+      if (!customerData) {
+        throw new Error('Customer record not found');
+      }
 
-    // Update user balance
-    const updatedUser = {
-      ...user,
-      balance: user.balance + amount,
-    };
-    localStorage.setItem('bankingUser', JSON.stringify(updatedUser));
+      // Create loan
+      const { data: loanData, error: loanError } = await supabase
+        .from('loans')
+        .insert({
+          cust_id: customerData.id,
+          amount,
+          branch_id: 1 // Default branch ID
+        })
+        .select()
+        .single();
 
-    // Update cached user balance
-    const userEvent = new CustomEvent('userUpdated', { detail: updatedUser });
-    window.dispatchEvent(userEvent);
+      if (loanError) throw loanError;
+      
+      if (!loanData) {
+        throw new Error('Failed to create loan');
+      }
 
-    // Update loans and transactions
-    setLoans((prev) => [newLoan, ...prev]);
-    setTransactions((prev) => [loanTransaction, ...prev]);
-    toast.success('Loan approved and disbursed');
+      // Add loan amount to user's balance
+      if (accountId) {
+        const { error: balanceError } = await supabase.rpc(
+          'update_balance',
+          { 
+            p_account_id: accountId,
+            p_amount: amount 
+          }
+        );
+
+        if (balanceError) throw balanceError;
+      }
+
+      // Create a new loan in our local state
+      const newLoan: Loan = {
+        id: loanData.loan_id.toString(),
+        loan_id: loanData.loan_id,
+        cust_id: loanData.cust_id,
+        amount: loanData.amount,
+        branch_id: loanData.branch_id || 0,
+        remainingAmount: loanData.amount,
+        monthlyPayment,
+        interestRate,
+        term,
+        createdAt: new Date(),
+        paid: false,
+        userId: user.id
+      };
+
+      // Update local state
+      setLoans(prev => [newLoan, ...prev]);
+      
+      // Refresh transactions
+      await fetchTransactions();
+      
+      toast.success('Loan approved and disbursed');
+    } catch (error) {
+      console.error('Loan application error:', error);
+      toast.error('Failed to process loan application');
+      throw error;
+    }
   };
 
   // Make a loan payment
@@ -233,7 +335,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     // Find the loan
-    const loanIndex = loans.findIndex((loan) => loan.loan_id === loanId);
+    const loanIndex = loans.findIndex((loan) => loan.id === loanId);
     if (loanIndex === -1) {
       throw new Error('Loan not found');
     }
@@ -245,7 +347,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error('Payment amount must be greater than zero');
     }
 
-    if (amount > loan.amount) {
+    if (amount > loan.remainingAmount) {
       throw new Error('Payment amount exceeds remaining loan balance');
     }
 
@@ -254,39 +356,53 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       throw new Error('Insufficient balance');
     }
 
-    // Create payment transaction
-    const paymentTransaction: Transaction = {
-      trans_id: Date.now().toString(),
-      fromID: accountId,
-      toID: 'BANK',
-      amount,
-      type: 'loan-payment',
-    };
-
-    // Update loan
-    const updatedLoan = {
-      ...loan,
-      amount: loan.amount - amount,
-    };
-
-    const updatedLoans = [...loans];
-    updatedLoans[loanIndex] = updatedLoan;
-
-    // Update user balance
-    const updatedUser = {
-      ...user,
-      balance: user.balance - amount,
-    };
-    localStorage.setItem('bankingUser', JSON.stringify(updatedUser));
-
-    // Update cached user balance
-    const userEvent = new CustomEvent('userUpdated', { detail: updatedUser });
-    window.dispatchEvent(userEvent);
-
-    // Update loans and transactions
-    setLoans(updatedLoans);
-    setTransactions((prev) => [paymentTransaction, ...prev]);
-    toast.success('Loan payment completed successfully');
+    try {
+      // Create payment transaction
+      if (accountId) {
+        const { error: transError } = await supabase
+          .from('transactions')
+          .insert({
+            fromID: accountId,
+            toID: null, // Bank
+            amount,
+            type: 'loan-payment'
+          });
+  
+        if (transError) throw transError;
+  
+        // Update user balance
+        const { error: balanceError } = await supabase.rpc(
+          'update_balance',
+          { 
+            p_account_id: accountId,
+            p_amount: -amount 
+          }
+        );
+  
+        if (balanceError) throw balanceError;
+  
+        // Update loan (In a real app, you'd update the loan in the database)
+        // Since we don't have a remaining_amount column, we're just handling it in the frontend
+        const updatedLoan = {
+          ...loan,
+          remainingAmount: loan.remainingAmount - amount,
+          paid: loan.remainingAmount - amount <= 0
+        };
+  
+        const updatedLoans = [...loans];
+        updatedLoans[loanIndex] = updatedLoan;
+        setLoans(updatedLoans);
+        
+        // Refresh transactions
+        await fetchTransactions();
+        
+        toast.success('Loan payment completed successfully');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast.error('Failed to process payment');
+      throw error;
+    }
   };
 
   // Get transactions for the current user
@@ -299,11 +415,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Get a loan by ID
   const getLoanById = (loanId: string) => {
-    return loans.find((loan) => loan.loan_id === loanId);
+    return loans.find((loan) => loan.id === loanId);
   };
 
   // Check if user has active loans
-  const hasActiveLoans = loans.some((loan) => loan.cust_id === user?.id);
+  const hasActiveLoans = loans.some((loan) => !loan.paid && loan.userId === user?.id);
 
   const value = {
     transactions,

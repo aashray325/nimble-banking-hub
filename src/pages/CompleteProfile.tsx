@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
@@ -38,7 +37,6 @@ const CompleteProfile = () => {
         firstName,
         lastName,
         email: '', // Will be taken from temp storage
-        balance: 0, // Will be overridden
         initialBalance: balanceValue,
       });
     } catch (error) {
