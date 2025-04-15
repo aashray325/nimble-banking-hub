@@ -94,8 +94,8 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="accountNumber" required>
-                Recipient Account Number
+              <Label htmlFor="accountNumber">
+                Recipient Account Number <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="accountNumber"
@@ -107,8 +107,8 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="amount" required>
-                Amount
+              <Label htmlFor="amount">
+                Amount <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="amount"
