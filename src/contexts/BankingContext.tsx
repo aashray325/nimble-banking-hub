@@ -14,7 +14,7 @@ export type Transaction = {
   toAccount: string | null;
   amount: number;
   type: string;
-  timestamp: string; // Changed from Date to string
+  timestamp: string;
 };
 
 export type Loan = {
@@ -27,7 +27,7 @@ export type Loan = {
   monthlyPayment: number;
   interestRate: number;
   term: number;
-  createdAt: string; // Changed from Date to string
+  createdAt: string;
   paid: boolean;
   userId?: string;
 };
@@ -199,7 +199,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (transError) throw transError;
 
-      // Update balances using RPC function calls
+      // Update balances using RPC
       const { error: fromError } = await supabase.rpc(
         'update_balance',
         { 
@@ -443,3 +443,4 @@ export const useBanking = () => {
   }
   return context;
 };
+
