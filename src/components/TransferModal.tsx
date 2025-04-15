@@ -31,12 +31,14 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [accountError, setAccountError] = useState('');
 
   const resetForm = () => {
     setAccountNumber('');
     setAmount('');
     setDescription('');
     setIsSubmitting(false);
+    setAccountError('');
   };
 
   const handleClose = () => {
@@ -44,11 +46,44 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
     onClose();
   };
 
+  const validateAccountNumber = (value: string) => {
+    const accountNum = parseInt(value);
+    if (isNaN(accountNum) || value !== accountNum.toString()) {
+      setAccountError('Please enter a valid account number');
+      return false;
+    }
+    
+    if (value === user?.accountNumber) {
+      setAccountError('You cannot transfer to your own account');
+      return false;
+    }
+    
+    setAccountError('');
+    return true;
+  };
+
+  const handleAccountNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setAccountNumber(value);
+    if (value) {
+      validateAccountNumber(value);
+    } else {
+      setAccountError('');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Reset any previous errors
+    setAccountError('');
+    
     if (!accountNumber || !amount) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!validateAccountNumber(accountNumber)) {
       return;
     }
 
@@ -63,20 +98,22 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
       return;
     }
 
-    if (accountNumber === user?.accountNumber) {
-      toast.error('You cannot transfer to your own account');
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      // Converting accountNumber to a number before passing it to the transfer function
       await transfer(accountNumber, transferAmount, description || 'Transfer');
       handleClose();
       toast.success('Transfer completed successfully');
     } catch (error) {
       console.error('Transfer failed:', error);
-      toast.error(error instanceof Error ? error.message : 'Transfer failed');
+      if (error instanceof Error) {
+        if (error.message.includes('Destination account not found')) {
+          setAccountError('Account not found');
+        } else {
+          toast.error(error.message);
+        }
+      } else {
+        toast.error('Transfer failed');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -102,9 +139,13 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
                 id="accountNumber"
                 placeholder="Enter account number"
                 value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
+                onChange={handleAccountNumberChange}
                 required
+                className={accountError ? "border-red-500" : ""}
               />
+              {accountError && (
+                <p className="text-xs text-red-500 mt-1">{accountError}</p>
+              )}
             </div>
 
             <div className="grid gap-2">

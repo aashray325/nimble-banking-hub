@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -198,9 +197,14 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         .from('account')
         .select('account_id')
         .eq('account_id', toAccountNumber)
-        .single();
+        .maybeSingle();
       
-      if (destAccountError || !destAccount) {
+      if (destAccountError) {
+        console.error('Error checking destination account:', destAccountError);
+        throw new Error('Failed to verify destination account');
+      }
+      
+      if (!destAccount) {
         throw new Error('Destination account not found');
       }
 
@@ -243,12 +247,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       toast.success('Transfer completed successfully');
     } catch (error) {
       console.error('Transfer error:', error);
-      toast.error('Failed to complete transfer');
+      toast.error(error instanceof Error ? error.message : 'Failed to complete transfer');
       throw error;
     }
   };
 
-  // Apply for a loan
   const applyForLoan = async (amount: number, term: number) => {
     if (!user) {
       throw new Error('User not authenticated');
@@ -346,7 +349,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Make a loan payment
   const makeLoanPayment = async (loanId: string, amount: number) => {
     if (!user) {
       throw new Error('User not authenticated');
@@ -422,7 +424,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
-  // Get transactions for the current user
   const getAccountTransactions = () => {
     if (!accountId) return [];
     return transactions.filter(
@@ -430,12 +431,10 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     );
   };
 
-  // Get a loan by ID
   const getLoanById = (loanId: string) => {
     return loans.find((loan) => loan.id === loanId);
   };
 
-  // Check if user has active loans
   const hasActiveLoans = loans.some((loan) => !loan.paid && loan.userId === user?.id);
 
   const value = {
@@ -452,7 +451,6 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   return <BankingContext.Provider value={value}>{children}</BankingContext.Provider>;
 };
 
-// Custom hook to use the banking context
 export const useBanking = () => {
   const context = useContext(BankingContext);
   if (context === undefined) {
