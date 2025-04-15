@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -185,12 +186,30 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      // First, insert the transaction
+      // Convert toAccount to a number
+      const toAccountNumber = parseInt(toAccount);
+      
+      if (isNaN(toAccountNumber)) {
+        throw new Error('Invalid account number');
+      }
+      
+      // Check if the destination account exists
+      const { data: destAccount, error: destAccountError } = await supabase
+        .from('account')
+        .select('account_id')
+        .eq('account_id', toAccountNumber)
+        .single();
+      
+      if (destAccountError || !destAccount) {
+        throw new Error('Destination account not found');
+      }
+
+      // Insert the transaction
       const { data, error: transError } = await supabase
         .from('transactions')
         .insert({
           fromID: accountId,
-          toID: parseInt(toAccount),
+          toID: toAccountNumber,
           amount,
           type: description || 'Transfer'
         })
@@ -198,7 +217,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (transError) throw transError;
 
-      // Update balances using RPC
+      // Update balances using RPC - note the parameters are passed as objects
       const { error: fromError } = await supabase.rpc(
         'update_balance',
         { 
@@ -212,7 +231,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const { error: toError } = await supabase.rpc(
         'update_balance',
         { 
-          p_account_id: parseInt(toAccount),
+          p_account_id: toAccountNumber,
           p_amount: amount 
         }
       );
@@ -369,7 +388,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   
         if (transError) throw transError;
   
-        // Update user balance
+        // Update user balance using proper parameter format
         const { error: balanceError } = await supabase.rpc(
           'update_balance',
           { 
@@ -380,8 +399,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   
         if (balanceError) throw balanceError;
   
-        // Update loan (In a real app, you'd update the loan in the database)
-        // Since we don't have a remaining_amount column, we're just handling it in the frontend
+        // Update loan in frontend state
         const updatedLoan = {
           ...loan,
           remainingAmount: loan.remainingAmount - amount,

@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
-import { ArrowRight, X } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 
 interface TransferModalProps {
@@ -70,6 +70,7 @@ const TransferModal = ({ isOpen, onClose }: TransferModalProps) => {
 
     setIsSubmitting(true);
     try {
+      // Converting accountNumber to a number before passing it to the transfer function
       await transfer(accountNumber, transferAmount, description || 'Transfer');
       handleClose();
       toast.success('Transfer completed successfully');
