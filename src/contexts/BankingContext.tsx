@@ -10,11 +10,11 @@ export type Transaction = {
   trans_id: number;
   fromID: number | null;
   toID: number | null;
-  fromAccount?: string;
-  toAccount?: string;
+  fromAccount: string | null;
+  toAccount: string | null;
   amount: number;
   type: string;
-  timestamp: Date;
+  timestamp: string; // Changed from Date to string
 };
 
 export type Loan = {
@@ -27,7 +27,7 @@ export type Loan = {
   monthlyPayment: number;
   interestRate: number;
   term: number;
-  createdAt: Date;
+  createdAt: string; // Changed from Date to string
   paid: boolean;
   userId?: string;
 };
@@ -109,11 +109,11 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           trans_id: t.trans_id,
           fromID: t.fromID,
           toID: t.toID,
-          fromAccount: t.fromID?.toString(),
-          toAccount: t.toID?.toString(),
+          fromAccount: t.fromID ? t.fromID.toString() : null,
+          toAccount: t.toID ? t.toID.toString() : null,
           amount: t.amount,
           type: t.type,
-          timestamp: new Date()
+          timestamp: new Date().toISOString() // Using ISO string instead of Date object
         }));
         
         setTransactions(formattedTransactions);
@@ -165,7 +165,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
               monthlyPayment: monthlyPayment,
               interestRate: interestRate,
               term: term,
-              createdAt: new Date(),
+              createdAt: new Date().toISOString(), // Using ISO string instead of Date object
               paid: remainingAmount <= 0,
               userId: user.id
             };
@@ -199,7 +199,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (transError) throw transError;
 
-      // Update balances
+      // Update balances using RPC function calls
       const { error: fromError } = await supabase.rpc(
         'update_balance',
         { 
@@ -309,7 +309,7 @@ export const BankingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         monthlyPayment,
         interestRate,
         term,
-        createdAt: new Date(),
+        createdAt: new Date().toISOString(), // Using ISO string instead of Date object
         paid: false,
         userId: user.id
       };

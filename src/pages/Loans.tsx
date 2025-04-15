@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBanking, Loan } from '@/contexts/BankingContext';
@@ -31,10 +30,8 @@ const Loans = () => {
     }
   }, [user, loans]);
 
-  // Event listener for user updates
   useEffect(() => {
     const handleUserUpdate = () => {
-      // Refresh loans when user data changes
       if (user) {
         setUserLoans(loans.filter(loan => loan.userId === user.id));
       }
@@ -97,7 +94,6 @@ const Loans = () => {
           </div>
         </div>
 
-        {/* Loan Information */}
         <div className="mb-6">
           <Card>
             <CardHeader>
@@ -131,7 +127,6 @@ const Loans = () => {
           </Card>
         </div>
 
-        {/* Your Loans Section */}
         <h2 className="mb-4 text-2xl font-bold">Your Loans</h2>
         
         {userLoans.length === 0 ? (
@@ -202,13 +197,11 @@ const Loans = () => {
         )}
       </div>
 
-      {/* Loan Application Modal */}
       <LoanModal 
         isOpen={isLoanModalOpen} 
         onClose={() => setIsLoanModalOpen(false)} 
       />
 
-      {/* Loan Payment Modal */}
       {selectedLoan && (
         <LoanPaymentModal 
           isOpen={isPaymentModalOpen} 

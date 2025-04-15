@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBanking, Transaction } from '@/contexts/BankingContext';
@@ -29,11 +28,9 @@ const Dashboard = () => {
     }
   }, [user, getAccountTransactions]);
 
-  // Event listener for user updates (balance changes)
   useEffect(() => {
     const handleUserUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
-      // Refresh transactions when user data changes
       if (customEvent.detail) {
         setTransactions(getAccountTransactions());
       }
@@ -125,7 +122,6 @@ const Dashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Account Balance Card */}
           <Card className="md:col-span-1">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium">Account Balance</CardTitle>
@@ -159,7 +155,6 @@ const Dashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Transaction History Card */}
           <Card className="md:col-span-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium">Transaction History</CardTitle>
@@ -220,7 +215,6 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Loan Status Section */}
         <div className="mt-6">
           <h2 className="mb-4 text-2xl font-bold">Loan Status</h2>
           <Card>
@@ -263,13 +257,11 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Transfer Modal */}
       <TransferModal 
         isOpen={isTransferModalOpen} 
         onClose={() => setIsTransferModalOpen(false)} 
       />
 
-      {/* Loan Modal */}
       <LoanModal 
         isOpen={isLoanModalOpen} 
         onClose={() => setIsLoanModalOpen(false)} 
